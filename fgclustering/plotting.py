@@ -56,44 +56,43 @@ def plot_feature_importance(
         f"Feature Importance - Showing {'top ' + str(top_n) if top_n else 'all'} features",
         fontsize=14,
     )
-    sns.set_theme(style="whitegrid")
-
-    # Plot global feature importance
-    importance_global = pd.DataFrame(
-        {
-            "Feature": feature_importance_global.index,
-            "Importance": feature_importance_global.to_list(),
-        }
-    ).sort_values(by="Importance", ascending=False)
-    if top_n:
-        importance_global = importance_global.iloc[:top_n,]
-
-    ax = plt.subplot(num_rows, num_cols, 1)
-    sns.barplot(data=importance_global, x="Importance", y="Feature", color="#3470a3", orient="h")
-    ax.set_xlim(0, 1)
-    ax.set_title(f"Cluster all")
-
-    # Plot local feature importance
-    for n, cluster in enumerate(feature_importance_local.columns):
-        importance_local = pd.DataFrame(
+    with sns.axes_style("whitegrid"):
+        # Plot global feature importance
+        importance_global = pd.DataFrame(
             {
-                "Feature": feature_importance_local.index,
-                "Importance": feature_importance_local[cluster].to_list(),
+                "Feature": feature_importance_global.index,
+                "Importance": feature_importance_global.to_list(),
             }
         ).sort_values(by="Importance", ascending=False)
         if top_n:
-            importance_local = importance_local.iloc[:top_n,]
-        ax = plt.subplot(num_rows, num_cols, n + 2)
-        sns.barplot(data=importance_local, x="Importance", y="Feature", color="#3470a3", orient="h")
+            importance_global = importance_global.iloc[:top_n,]
+
+        ax = plt.subplot(num_rows, num_cols, 1)
+        sns.barplot(data=importance_global, x="Importance", y="Feature", color="#3470a3", orient="h")
         ax.set_xlim(0, 1)
-        ax.set_title(f"Cluster {cluster}")
+        ax.set_title(f"Cluster all")
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+        # Plot local feature importance
+        for n, cluster in enumerate(feature_importance_local.columns):
+            importance_local = pd.DataFrame(
+                {
+                    "Feature": feature_importance_local.index,
+                    "Importance": feature_importance_local[cluster].to_list(),
+                }
+            ).sort_values(by="Importance", ascending=False)
+            if top_n:
+                importance_local = importance_local.iloc[:top_n,]
+            ax = plt.subplot(num_rows, num_cols, n + 2)
+            sns.barplot(data=importance_local, x="Importance", y="Feature", color="#3470a3", orient="h")
+            ax.set_xlim(0, 1)
+            ax.set_title(f"Cluster {cluster}")
 
-    if save:
-        save_figure(save, '_feature_importance')
-    else:
-        plt.show()
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+        if save:
+            save_figure(save, '_feature_importance')
+        else:
+            plt.show()
 
 
 def plot_distributions(
