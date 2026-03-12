@@ -7,11 +7,13 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import textwrap
 
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib import rc_context
 from matplotlib.colors import ListedColormap, to_rgba
+from matplotlib.cm import ScalarMappable
 from plotly.subplots import make_subplots
 from typing import Tuple, List, Union
 from pathlib import Path
@@ -121,6 +123,162 @@ def plot_feature_importance(
         if save:
             save_figure(save, "_feature_importance")
         return fig, fig.axes
+
+
+def plot_feature_importance_bubble(
+    feature_importance: dict,
+    top_n: int = 20,
+    features_to_show: List[str] = None,
+    direction: str = "vertical",
+    size_range: Tuple[int, int] = (100, 600),
+    highlight_feature: str = None,
+    save: str = None,
+    figsize: Tuple[float, float] = (10, 8),
+) -> Tuple[Figure, Axes, pd.DataFrame]:
+    """
+    Plot local and global feature importance as a bubble chart per cluster.
+
+    Bubble color encodes the median feature value per cluster (min-max scaled
+    per feature), and bubble size encodes local feature importance. Features
+    are displayed in global-importance rank order.
+
+    :param feature_importance: Dictionary-like object containing
+        `data_clustering`, `feature_importance_global`, and `feature_importance_local`.
+    :type feature_importance: dict
+    :param top_n: Number of globally ranked features to display. Default: 20.
+    :type top_n: int
+    :param features_to_show: Explicit feature list to display. If provided,
+        `top_n` is ignored.
+    :type features_to_show: List[str]
+    :param direction: Bubble chart orientation, either "vertical" or "horizontal".
+    :type direction: str
+    :param size_range: Bubble size range passed to seaborn.
+    :type size_range: Tuple[int, int]
+    :param highlight_feature: Optional feature to pin at rank 0 (first row/column).
+    :type highlight_feature: str
+    :param save: Optional path prefix to save figure.
+    :type save: str
+    :param figsize: Figure size for matplotlib.
+    :type figsize: Tuple[float, float]
+
+    :return: Matplotlib figure, axis and plotting dataframe.
+    :rtype: Tuple[Figure, Axes, pd.DataFrame]
+    """
+    if direction not in ["vertical", "horizontal"]:
+        raise ValueError("direction must be 'vertical' or 'horizontal'")
+
+    data_clustering = feature_importance["data_clustering"].copy()
+    fi_global = feature_importance["feature_importance_global"].copy()
+    fi_local = feature_importance["feature_importance_local"].copy()
+
+    data_clustering["cluster"] = data_clustering["cluster"].astype(int)
+
+    if features_to_show is None:
+        features = fi_global.sort_values(ascending=False).index.tolist()
+        if top_n is not None:
+            features = features[:top_n]
+    else:
+        missing = [f for f in features_to_show if f not in fi_global.index]
+        if missing:
+            raise ValueError(f"features_to_show contains unknown features: {missing}")
+        features = [f for f in features_to_show]
+
+    if highlight_feature is not None:
+        if highlight_feature not in fi_global.index:
+            raise ValueError(f"highlight_feature '{highlight_feature}' is not in feature importance table")
+        features = [f for f in features if f != highlight_feature]
+        features = [highlight_feature] + features
+
+    fi_global = fi_global.loc[features]
+    fi_local = fi_local.loc[features]
+
+    median_values = data_clustering.groupby("cluster").median(numeric_only=True).T
+    median_values = median_values.loc[features]
+
+    scaled_values = median_values.sub(median_values.min(axis=1), axis=0)
+    denom = median_values.max(axis=1) - median_values.min(axis=1)
+    denom = denom.replace(0, 1)
+    scaled_values = scaled_values.div(denom, axis=0)
+
+    global_rank = pd.Series(range(len(features)), index=features, name="global_rank")
+
+    melted_values = scaled_values.reset_index().rename(columns={"index": "feature"}).melt(
+        id_vars="feature", var_name="cluster", value_name="median_value"
+    )
+    melted_values["global_rank"] = melted_values["feature"].map(global_rank)
+
+    melted_local = fi_local.reset_index().rename(columns={"index": "feature"}).melt(
+        id_vars="feature", var_name="cluster", value_name="local_importance"
+    )
+
+    melted = melted_values.merge(melted_local, on=["feature", "cluster"], how="left")
+
+    formatted_labels = [
+        textwrap.fill(f.replace("_appended", "").replace("_", " "), width=30, break_long_words=True)
+        for f in features
+    ]
+    label_map = dict(zip(features, formatted_labels))
+    melted["feature_label"] = melted["feature"].map(label_map)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    if direction == "horizontal":
+        sns.scatterplot(
+            data=melted,
+            y="cluster",
+            x="global_rank",
+            size="local_importance",
+            hue="median_value",
+            sizes=size_range,
+            palette="RdBu_r",
+            edgecolor="k",
+            legend=False,
+            ax=ax,
+        )
+        ax.invert_yaxis()
+        ax.set(
+            ylabel="Cluster",
+            xlabel="Feature (ranked by global importance)",
+            xticks=np.arange(len(features)),
+            xticklabels=[label_map[f] for f in features],
+            yticks=sorted(data_clustering["cluster"].unique()),
+        )
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, ha="center")
+    else:
+        sns.scatterplot(
+            data=melted,
+            x="cluster",
+            y="global_rank",
+            size="local_importance",
+            hue="median_value",
+            sizes=size_range,
+            palette="RdBu_r",
+            edgecolor="k",
+            legend=False,
+            ax=ax,
+        )
+        ax.invert_yaxis()
+        ax.set(
+            xlabel="Cluster",
+            ylabel="Feature (ranked by global importance)",
+            xticks=sorted(data_clustering["cluster"].unique()),
+            yticks=np.arange(len(features)),
+            yticklabels=[label_map[f] for f in features],
+        )
+
+    sns.despine(left=True, bottom=True)
+    fig.tight_layout()
+
+    sm = ScalarMappable(cmap=plt.cm.get_cmap("RdBu_r"), norm=plt.Normalize(vmin=0, vmax=1))
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.03)
+    cbar.set_label("Median value (scaled)")
+    cbar.set_ticks([0, 0.5, 1])
+
+    if save:
+        save_figure(save, "_feature_importance_bubble")
+
+    return fig, ax, melted
 
 
 def plot_distributions(

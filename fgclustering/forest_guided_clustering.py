@@ -20,6 +20,7 @@ from .optimizer import Optimizer
 from .statistics import FeatureImportance
 from .plotting import (
     plot_feature_importance,
+    plot_feature_importance_bubble,
     plot_distributions,
     plot_heatmap_regression,
     plot_heatmap_classification,
@@ -234,6 +235,59 @@ def plot_forest_guided_feature_importance(
         save=save,
         reorder=reorder,
         recolor=recolor,
+    )
+
+def plot_forest_guided_feature_importance_bubble(
+    feature_importance: Any,
+    top_n: Optional[int] = 20,
+    features_to_show: Optional[List[str]] = None,
+    direction: Optional[str] = "vertical",
+    size_range: Optional[Tuple[int, int]] = (100, 600),
+    highlight_feature: Optional[str] = None,
+    save: Optional[str] = None,
+    figsize: Optional[Tuple[float, float]] = (10, 8),
+) -> Tuple[Figure, Axes, pd.DataFrame]:
+    """
+    Visualize local and global feature importance values as a bubble chart.
+
+    Bubble size reflects local feature importance per cluster and bubble color
+    reflects min-max scaled cluster medians for each feature.
+
+    :param feature_importance: Output of `forest_guided_feature_importance()`.
+    :type feature_importance: Any
+    :param top_n: Number of globally ranked features to display. Default: 20.
+    :type top_n: Optional[int]
+    :param features_to_show: Explicit feature list to display. If provided, `top_n` is ignored.
+    :type features_to_show: Optional[List[str]]
+    :param direction: Bubble chart orientation, either "vertical" or "horizontal".
+    :type direction: Optional[str]
+    :param size_range: Bubble size range passed to seaborn.
+    :type size_range: Optional[Tuple[int, int]]
+    :param highlight_feature: Optional feature to pin as first-ranked feature.
+    :type highlight_feature: Optional[str]
+    :param save: If specified, path prefix to save plots. Default: None.
+    :type save: Optional[str]
+    :param figsize: Figure size for matplotlib.
+    :type figsize: Optional[Tuple[float, float]]
+
+    :return: Matplotlib figure, axis, and plotting dataframe.
+    :rtype: Tuple[Figure, Axes, pd.DataFrame]
+    """
+    required_keys = {"data_clustering", "feature_importance_global", "feature_importance_local"}
+    if not all(key in feature_importance for key in required_keys):
+        raise ValueError(
+            "feature_importance must include data_clustering, feature_importance_global, and feature_importance_local"
+        )
+
+    return plot_feature_importance_bubble(
+        feature_importance=feature_importance,
+        top_n=top_n,
+        features_to_show=features_to_show,
+        direction=direction,
+        size_range=size_range,
+        highlight_feature=highlight_feature,
+        save=save,
+        figsize=figsize,
     )
 
 

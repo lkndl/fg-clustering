@@ -19,6 +19,7 @@ from fgclustering.forest_guided_clustering import (
     forest_guided_feature_importance,
     plot_forest_guided_decision_paths,
     plot_forest_guided_feature_importance,
+    plot_forest_guided_feature_importance_bubble,
     DistanceRandomForestProximity,
     ClusteringKMedoids,
 )
@@ -186,6 +187,37 @@ class TestForestGuidedClustering(unittest.TestCase):
         )
         self.assertTrue(
             os.path.exists(f"{save}_feature_importance.png"), "Feature importance plot file was not saved."
+        )
+
+
+    def test_plot_forest_guided_feature_importance_bubble(self):
+        k = 3
+        feature_importance_local = pd.DataFrame(np.random.rand(self.X.shape[1], k), index=self.X.columns)
+        feature_importance_global = pd.Series(np.random.rand(self.X.shape[1]), index=self.X.columns)
+        data_clustering = self.X.copy()
+        data_clustering["cluster"] = np.random.randint(0, k, size=self.X.shape[0])
+
+        feature_importance = {
+            "feature_importance_local": feature_importance_local,
+            "feature_importance_global": feature_importance_global,
+            "data_clustering": data_clustering,
+        }
+
+        save = os.path.join(self.tmp_path, "test_fgc")
+
+        fig, ax, plotting_df = plot_forest_guided_feature_importance_bubble(
+            feature_importance=feature_importance,
+            top_n=5,
+            direction="vertical",
+            save=save,
+        )
+
+        self.assertIsNotNone(fig)
+        self.assertIsNotNone(ax)
+        self.assertFalse(plotting_df.empty)
+        self.assertTrue(
+            os.path.exists(f"{save}_feature_importance_bubble.png"),
+            "Feature importance bubble plot file was not saved.",
         )
 
     def test_plot_forest_guided_decision_paths(self):
